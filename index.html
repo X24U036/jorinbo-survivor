@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>常林暴サバイバー</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@700&display=swap"
+        rel="stylesheet"
+    >
+</head>
+
+<body>
+
+    <!-- ■ ホーム画面 ■ -->
+    <div id="home-screen">
+        <div class="home-container">
+
+            <h1 class="game-title">
+                常林暴<br>
+                サバイバー
+            </h1>
+
+            <div class="coin-display">
+                所持金:
+                <span id="total-coins">0</span>
+                G
+            </div>
+
+            <div class="menu-grid">
+
+                <button
+                    id="btn-battle"
+                    class="menu-btn battle-btn"
+                >
+                    戦闘開始
+                </button>
+
+                <button
+                    id="btn-skill-shop"
+                    class="menu-btn shop-btn"
+                    style="background: linear-gradient(45deg, #ff9f43, #ff5252);"
+                >
+                    スキル選択
+                </button>
+
+                <button
+                    id="btn-weapon"
+                    class="menu-btn shop-btn"
+                >
+                    武器強化
+                </button>
+
+                <button
+                    id="btn-player"
+                    class="menu-btn shop-btn"
+                >
+                    能力強化
+                </button>
+
+            </div>
+
+            <input
+                type="text"
+                id="username-input"
+                placeholder="ヒーロー名"
+                class="name-input"
+            >
+
+            <button
+                id="btn-reset"
+                class="reset-btn"
+            >
+                データリセット
+            </button>
+
+        </div>
+    </div>
+
+    <!-- ■ スキル選択画面 ■ -->
+    <div
+        id="skill-shop-screen"
+        class="hidden"
+    >
+        <div
+            class="shop-container"
+            style="width: 700px;"
+        >
+
+            <h2 style="color: #ff9f43;">
+                スキル選択
+            </h2>
+
+            <div class="coin-display-mini">
+                所持金:
+                <span id="skill-shop-coins">0</span>
+                G
+            </div>
+
+            <div class="skill-info-text">
+                装備中:
+
+                <span
+                    id="current-equip-name"
+                    style="color: #00ffff;"
+                >
+                    なし
+                </span>
+            </div>
+
+            <div
+                id="skill-items-container"
+                class="shop-items-grid"
+            ></div>
+
+            <button
+                id="btn-back-skill"
+                class="back-btn"
+            >
+                戻る
+            </button>
+
+        </div>
+    </div>
+
+    <!-- ■ 武器強化画面 ■ -->
+    <div
+        id="weapon-shop-screen"
+        class="hidden"
+    >
+        <div class="shop-container">
+
+            <h2 id="weapon-shop-title">
+                武器強化
+            </h2>
+
+            <div class="coin-display-mini">
+                所持金:
+                <span id="weapon-shop-coins">0</span>
+                G
+            </div>
+
+            <div
+                id="weapon-shop-items"
+                class="shop-items-grid"
+            ></div>
+
+            <button
+                id="btn-back-weapon"
+                class="back-btn"
+            >
+                戻る
+            </button>
+
+        </div>
+    </div>
+
+    <!-- ■ 能力強化画面 ■ -->
+    <div
+        id="player-shop-screen"
+        class="hidden"
+    >
+        <div class="shop-container">
+
+            <h2 id="player-shop-title">
+                能力強化
+            </h2>
+
+            <div class="coin-display-mini">
+                所持金:
+                <span id="player-shop-coins">0</span>
+                G
+            </div>
+
+            <div
+                id="player-shop-items"
+                class="shop-items-grid"
+            ></div>
+
+            <button
+                id="btn-back-player"
+                class="back-btn"
+            >
+                戻る
+            </button>
+
+        </div>
+    </div>
+
+    <!-- ■ WAVEクリア後のショップ ■ -->
+    <div
+        id="wave-shop-screen"
+        class="hidden"
+    >
+        <div class="shop-container">
+
+            <h2 style="color: #00ff00;">
+                WAVE CLEAR!
+            </h2>
+
+            <p>
+                次は WAVE
+                <span id="next-wave-num">2</span>
+            </p>
+
+            <div class="coin-display-mini">
+                所持金:
+                <span id="wave-shop-coins">0</span>
+                G
+            </div>
+
+            <div
+                id="wave-shop-items"
+                class="shop-items-grid"
+            ></div>
+
+            <button
+                id="btn-next-wave"
+                class="menu-btn battle-btn"
+            >
+                次へ進む
+            </button>
+
+        </div>
+    </div>
+
+    <!-- ■ ゲーム画面 ■ -->
+    <div
+        id="game-screen"
+        class="hidden"
+    >
+
+        <!-- 上部ステータス -->
+        <div class="info-bar">
+
+            <div class="hud-item hp-box">
+                HP:
+                <span id="hp-display">
+                    10/10
+                </span>
+            </div>
+
+            <div class="hud-item">
+                WAVE:
+                <span id="wave-display">
+                    1
+                </span>
+            </div>
+
+            <div class="hud-item timer-box">
+                TIME:
+                <span id="timer">
+                    60
+                </span>
+            </div>
+
+            <div class="hud-item">
+                COIN:
+                <span id="game-coins">
+                    0
+                </span>
+            </div>
+
+        </div>
+
+        <!-- ボス用HUD -->
+        <div
+            id="boss-hud"
+            class="hidden"
+        >
+
+            <div class="boss-name">
+                WARNING: GIANT BOSS
+            </div>
+
+            <div class="hp-bar-frame">
+                <div id="boss-hp-bar"></div>
+            </div>
+
+            <div
+                id="boss-attack-name"
+                class="boss-attack-name"
+            >
+                攻撃準備中...
+            </div>
+
+        </div>
+
+        <!-- スキルゲージ -->
+        <div id="bomb-hud">
+
+            <div class="bomb-label">
+                SKILL [SPACE]
+            </div>
+
+            <div class="bomb-gauge-frame">
+                <div id="bomb-gauge-bar"></div>
+            </div>
+
+            <div
+                id="game-skill-name"
+                style="
+                    font-size: 10px;
+                    color: #aaa;
+                    margin-top: 5px;
+                "
+            >
+                SKILL
+            </div>
+
+        </div>
+
+        <!-- キャラクター・敵・弾の表示領域 -->
+        <div id="game-area">
+            <div id="player"></div>
+        </div>
+
+        <!-- WAVE開始表示 -->
+        <div
+            id="wave-modal"
+            class="hidden"
+        >
+
+            <h2 id="wave-title">
+                WAVE 1
+            </h2>
+
+            <p>
+                生き残れ...
+            </p>
+
+        </div>
+
+    </div>
+
+    <!-- ■ ゲームオーバー画面 ■ -->
+    <div
+        id="game-over-screen"
+        class="hidden"
+    >
+
+        <h1 class="dead-title">
+            YOU DIED
+        </h1>
+
+        <div class="result-box">
+
+            <p>
+                到達 WAVE:
+                <span id="result-wave"></span>
+            </p>
+
+            <p>
+                獲得コイン:
+
+                <span
+                    id="result-coins"
+                    class="gold-text"
+                ></span>
+
+                G
+            </p>
+
+        </div>
+
+        <div class="menu-grid">
+
+            <button
+                id="btn-retry"
+                class="menu-btn battle-btn"
+            >
+                もう一度
+            </button>
+
+            <button
+                id="btn-return-home"
+                class="menu-btn back-btn"
+            >
+                ホームへ
+            </button>
+
+        </div>
+
+    </div>
+
+    <!-- ■ ゲームクリア画面 ■ -->
+    <div
+        id="game-clear-screen"
+        class="hidden"
+    >
+
+        <h1 class="clear-title">
+            MISSION COMPLETE!
+        </h1>
+
+        <div class="result-box">
+
+            <p>
+                おめでとうございます！
+            </p>
+
+            <p>
+                獲得コイン:
+
+                <span
+                    id="clear-coins"
+                    class="gold-text"
+                ></span>
+
+                G
+            </p>
+
+        </div>
+
+        <div class="menu-grid">
+
+            <button
+                id="btn-clear-home"
+                class="menu-btn back-btn"
+            >
+                ホームへ
+            </button>
+
+        </div>
+
+    </div>
+
+    <!-- JavaScript読み込み -->
+    <script src="script.js"></script>
+
+</body>
+</html>
