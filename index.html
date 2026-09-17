@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>常林暴サバイバー</title>
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=dragons-1">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -35,7 +35,9 @@
                 ログイン中: <span id="current-user-name">-</span>
             </div>
             <div class="coin-display">所持金: <span id="total-coins">0</span> G</div>
+            <div class="selected-character"><img id="selected-character-image" src="player_balance.png" alt="冒険者"><span id="selected-character-name">冒険者（バランス型）</span></div>
             <div class="menu-grid">
+                <button id="btn-character" class="menu-btn shop-btn">キャラクター選択</button>
                 <button id="btn-battle" class="menu-btn battle-btn">戦闘開始</button>
                 <button id="btn-skill-shop" class="menu-btn shop-btn" style="background: linear-gradient(45deg, #ff9f43, #ff5252);">スキル選択</button>
                 <button id="btn-weapon" class="menu-btn shop-btn">武器強化</button>
@@ -51,6 +53,14 @@
         </div>
     </div>
 
+    <div id="character-modal" class="account-modal hidden" role="dialog" aria-modal="true" aria-labelledby="character-title">
+        <div class="character-panel">
+            <h2 id="character-title">キャラクター選択</h2>
+            <p>全キャラ無料！ 強化とスキルは共通です。キャラ変更はホームで行えます。</p>
+            <div id="character-cards"></div>
+            <button id="btn-close-character" class="back-btn">決定して戻る</button>
+        </div>
+    </div>
     <div id="delete-account-modal" class="account-modal hidden" role="dialog" aria-modal="true" aria-labelledby="delete-account-title">
         <div class="account-modal-card">
             <h2 id="delete-account-title">アカウント削除</h2>
@@ -122,9 +132,19 @@
         </div>
     </div>
 
+    <div id="reward-screen" class="hidden" role="dialog" aria-modal="true" aria-labelledby="reward-title">
+        <div class="reward-panel">
+            <p>WAVE <span id="reward-wave">1</span> CLEAR!</p>
+            <h2 id="reward-title">強化を1つ選択</h2>
+            <p>無料で獲得！ 効果は今回の挑戦が終わるまで続きます。</p>
+            <div id="reward-cards"></div>
+            <p>選択後はコインで強化できるショップへ進みます。</p>
+        </div>
+    </div>
     <div id="wave-shop-screen" class="hidden">
         <div class="shop-container">
             <h2 style="color:#00ff00;">WAVE CLEAR!</h2>
+            <p id="run-upgrade-summary">今回の挑戦の強化：なし</p>
             <p>次は WAVE <span id="next-wave-num">2</span></p>
             <div class="coin-display-mini">所持金: <span id="wave-shop-coins">0</span> G</div>
             <div id="wave-shop-items" class="shop-items-grid"></div>
@@ -152,13 +172,15 @@
             <div id="game-skill-name" style="font-size:10px; color:#aaa; margin-top:5px;">SKILL</div>
         </div>
         
+        <div id="wave-event-hud" class="hidden" aria-live="polite"></div>
         <div id="game-area">
             <div id="player"></div>
         </div>
 
         <div id="wave-modal" class="hidden">
             <h2 id="wave-title">WAVE 1</h2>
-            <p>生き残れ...</p>
+            <h3 id="wave-event-title"></h3>
+            <p id="wave-event-description">生き残れ...</p>
         </div>
     </div>
 
@@ -189,6 +211,6 @@
     <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="script.js"></script>
+    <script src="script.js?v=dragons-1"></script>
 </body>
 </html>

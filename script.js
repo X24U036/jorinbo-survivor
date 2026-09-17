@@ -90,6 +90,7 @@ function getDefaultData() {
     return {
         coins: 0,
         name: "HERO",
+        character: "balance",
         upgrade: { damage: 1, fireRate: 1, count: 1, bulletSize: 1, speed: 1, maxHp: 1 },
         skills: {
             owned: ['sphere'], 
@@ -105,6 +106,219 @@ let pendingRegistrationName = '';
 let rankingReturnScreen = 'auth';
 let waveResultSaved = false;
 
+// キャラクター選択はアカウント別にこのブラウザへ保存する。
+const CHARACTERS = {
+    balance: { name: '冒険者', role: 'バランス型', image: 'player_balance.png', hp: 10, damage: 1, speed: 1, detail: '基本HP10 ／ 攻撃・移動は標準' },
+    power: { name: '魔導士', role: '攻撃型', image: 'player_power.png', hp: 8, damage: 1.4, speed: 0.9, detail: '基本HP8 ／ 通常弾の攻撃力＋40％ ／ 移動−10％' },
+    speed: { name: 'レンジャー', role: 'スピード型', image: 'player_speed.png', hp: 8, damage: 0.9, speed: 1.3, detail: '基本HP8 ／ 移動＋30％ ／ 通常弾の攻撃力−10％' },
+    tank: { name: '重装騎士', role: '耐久型', image: 'player_tank.png', hp: 16, damage: 1, speed: 0.8, detail: '基本HP16 ／ 移動−20％ ／ 攻撃は標準' }
+};
+function getSelectedCharacter() {
+    return Object.hasOwn(CHARACTERS, gameData.character) ? CHARACTERS[gameData.character] : CHARACTERS.balance;
+}
+function getPlayerMaxHp() {
+    return getSelectedCharacter().hp + ((gameData.upgrade.maxHp || 1) - 1) * 5 + (runUpgrades.maxHp || 0) * 5;
+}
+function updateCharacterDisplay() {
+    const character = getSelectedCharacter();
+    player.style.backgroundImage = `url('${character.image}')`;
+    document.getElementById('selected-character-name').textContent = character.name + '（' + character.role + '）';
+    document.getElementById('selected-character-image').src = character.image;
+    document.getElementById('selected-character-image').alt = character.name;
+}
+function selectCharacter(id) {
+    if (!Object.hasOwn(CHARACTERS, id) || homeScreen.classList.contains('hidden') || btnBattle.disabled) return;
+    gameData.character = id;
+    saveData();
+    updateCharacterDisplay();
+    renderCharacterCards();
+}
+function renderCharacterCards() {
+    const container = document.getElementById('character-cards');
+    container.replaceChildren();
+    for (const [id, character] of Object.entries(CHARACTERS)) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'character-card';
+        const selected = gameData.character === id;
+        button.classList.toggle('selected', selected);
+        button.setAttribute('aria-pressed', String(selected));
+        button.innerHTML = `<img src="${character.image}" alt=""><strong>${character.name}</strong><span>${character.role}</span><small>${character.detail}</small><b>${selected ? '選択中' : 'このキャラを選択'}</b>`;
+        button.addEventListener('click', () => selectCharacter(id));
+        container.appendChild(button);
+    }
+}
+document.getElementById('btn-character').addEventListener('click', () => {
+    if (homeScreen.classList.contains('hidden') || btnBattle.disabled) return;
+    renderCharacterCards();
+    document.getElementById('character-modal').classList.remove('hidden');
+    document.getElementById('btn-close-character').focus();
+});
+function closeCharacterSelect() {
+    document.getElementById('character-modal').classList.add('hidden');
+    document.getElementById('btn-character').focus();
+}
+document.getElementById('btn-close-character').addEventListener('click', closeCharacterSelect);
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !document.getElementById('character-modal').classList.contains('hidden')) closeCharacterSelect();
+});
+
+// 3択強化はこの挑戦の間だけ保持。gameDataやFirebaseには保存しない。
+let runUpgrades = {};
+let rewardChoices = [];
+let rewardPending = false;
+let lastRewardWave = 0;
+const RUN_REWARDS = [
+    { id: 'damage', name: '火力アップ', detail: '通常弾の攻撃力 ＋20％' },
+    { id: 'fireRate', name: '連射アップ', detail: '通常弾の連射速度 ＋10％' },
+    { id: 'speed', name: '俊足', detail: '移動速度 ＋10％' },
+    { id: 'maxHp', name: '生命力', detail: '最大HP ＋5、現在HPも5回復' },
+    { id: 'count', name: '追加ショット', detail: '通常弾の同時発射数 ＋1' },
+    { id: 'bulletSize', name: '大型弾', detail: '通常弾のサイズ ＋20％' }
+];
+
+function resetRunUpgrades() {
+    runUpgrades = Object.fromEntries(RUN_REWARDS.map(reward => [reward.id, 0]));
+    rewardChoices = [];
+    rewardPending = false;
+    lastRewardWave = 0;
+    document.getElementById('reward-screen').classList.add('hidden');
+    updateRunUpgradeSummary();
+}
+
+function updateRunUpgradeSummary() {
+    const acquired = RUN_REWARDS.filter(reward => runUpgrades[reward.id] > 0)
+        .map(reward => reward.name + ' ×' + runUpgrades[reward.id]);
+    document.getElementById('run-upgrade-summary').textContent =
+        '今回の挑戦の強化：' + (acquired.join(' ／ ') || 'なし');
+}
+
+function openWaveReward() {
+    if (currentWave >= 20 || currentWave <= lastRewardWave || rewardPending) return;
+    rewardPending = true;
+    document.body.style.cursor = 'default';
+    const pool = [...RUN_REWARDS];
+    for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    rewardChoices = pool.slice(0, 3).map(reward => reward.id);
+    const cards = document.getElementById('reward-cards');
+    cards.replaceChildren();
+    document.getElementById('reward-wave').textContent = currentWave;
+    pool.slice(0, 3).forEach(reward => {
+        const button = document.createElement('button');
+        button.classList.add('reward-card');
+        const name = document.createElement('strong');
+        name.textContent = reward.name;
+        const detail = document.createElement('span');
+        detail.textContent = reward.detail;
+        const level = document.createElement('small');
+        level.textContent = '獲得済み ' + (runUpgrades[reward.id] || 0) + '回';
+        button.appendChild(name);
+        button.appendChild(detail);
+        button.appendChild(level);
+        button.addEventListener('click', () => selectWaveReward(reward.id));
+        cards.appendChild(button);
+    });
+    document.getElementById('reward-screen').classList.remove('hidden');
+}
+
+function selectWaveReward(id) {
+    if (!rewardPending || !rewardChoices.includes(id) || currentWave <= lastRewardWave) return;
+    rewardPending = false;
+    lastRewardWave = currentWave;
+    runUpgrades[id] = (runUpgrades[id] || 0) + 1;
+    if (id === 'maxHp') {
+        playerMaxHp = getPlayerMaxHp();
+        playerCurrentHp = Math.min(playerMaxHp, playerCurrentHp + 5);
+        updateHpDisplay();
+    }
+    rewardChoices = [];
+    updateRunUpgradeSummary();
+    document.getElementById('reward-screen').classList.add('hidden');
+    openWaveShop();
+}
+
+// イベント設定：3WAVEごとに必ず1種類。倍率はこのWAVE内だけ有効。
+const WAVE_EVENT_INTERVAL = 3;
+const WAVE_EVENTS = {
+    coin: { name: 'コインラッシュ', description: 'このWAVEの撃破報酬が2倍！', coins: 2 },
+    rage: { name: '暴走WAVE', description: '敵速度1.3倍・ダメージ1.5倍！ 撃破報酬3倍', coins: 3 },
+    treasure: { name: '宝物スライム', description: '金色スライムを15秒以内に倒してボーナス！', coins: 1 },
+    barrage: { name: '弾幕地獄', description: '通常敵は約60％。上から来る弾幕の隙間を避けよう！', coins: 1 }
+};
+let currentWaveEvent = null;
+let lastWaveEvent = null;
+let waveEventActive = false;
+let nextBarrageTime = 0;
+let waveIntroTimer = null;
+
+function prepareWaveEvent() {
+    currentWaveEvent = null;
+    if (currentWave % WAVE_EVENT_INTERVAL === 0) {
+        const choices = Object.keys(WAVE_EVENTS).filter(key => key !== lastWaveEvent);
+        currentWaveEvent = choices[Math.floor(Math.random() * choices.length)];
+        lastWaveEvent = currentWaveEvent;
+    }
+    const event = WAVE_EVENTS[currentWaveEvent];
+    document.getElementById('wave-event-title').textContent = event ? event.name : '';
+    document.getElementById('wave-event-description').textContent = event ? event.description : '生き残れ…';
+    const hud = document.getElementById('wave-event-hud');
+    hud.textContent = event ? event.name + '：' + event.description : '';
+    hud.classList.toggle('hidden', !event);
+}
+
+function stopWaveEvent() {
+    waveEventActive = false;
+    clearTimeout(waveIntroTimer);
+    // ボーナス敵は通常敵の残数に含めない。消えてもWAVE進行を止めない。
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        if (enemies[i].type === 'treasure') {
+            enemies[i].element.remove();
+            enemies.splice(i, 1);
+        }
+    }
+    enemyBullets.forEach(b => b.element.remove());
+    enemyBullets = [];
+}
+
+function updateWaveEvent(now) {
+    if (!waveEventActive || isGameOver) return;
+    if (currentWaveEvent === 'treasure') {
+        const treasure = enemies.find(e => e.type === 'treasure');
+        if (treasure) {
+            const remaining = Math.max(0, Math.ceil((treasure.expiresAt - now) / 1000));
+            document.getElementById('wave-event-hud').textContent =
+                '宝物スライム：残り' + remaining + '秒 ／ 撃破で' + treasure.coinDrop + 'G';
+            if (remaining === 0) {
+                treasure.element.remove();
+                enemies.splice(enemies.indexOf(treasure), 1);
+                document.getElementById('wave-event-hud').textContent = '宝物スライムは逃げ出した！';
+            }
+        }
+    }
+    if (currentWaveEvent !== 'barrage' || now < nextBarrageTime) return;
+    nextBarrageTime = now + 1800;
+    if (enemyBullets.length > 180) return;
+    const width = gameArea.clientWidth || window.innerWidth;
+    const lanes = 12;
+    const gap = Math.floor(Math.random() * (lanes - 2));
+    for (let i = 0; i < lanes; i++) {
+        if (i >= gap && i < gap + 3) continue;
+        const element = document.createElement('div');
+        element.classList.add('enemy-bullet', 'event-bullet');
+        const x = (i + 0.5) * width / lanes;
+        element.style.left = x + 'px';
+        element.style.top = '-20px';
+        gameArea.appendChild(element);
+        enemyBullets.push({
+            element, x, y: -20, vx: 0, vy: 2.5,
+            damage: 1, hitRadius: 16, createdAt: performance.now(), lifetime: 10000
+        });
+    }
+}
+
 function getSaveKey() {
     if (typeof auth !== 'undefined' && auth && auth.currentUser) {
         return `neonSurvivorData_${auth.currentUser.uid}`;
@@ -116,6 +330,7 @@ function repairGameData(saved) {
     if (!saved || !saved.upgrade) return getDefaultData();
 
     const repaired = saved;
+    if (!Object.hasOwn(CHARACTERS, repaired.character)) repaired.character = "balance";
     if(!repaired.upgrade.count) repaired.upgrade.count = 1;
     if(!repaired.upgrade.maxHp) repaired.upgrade.maxHp = 1;
     if(!repaired.upgrade.bulletSize) repaired.upgrade.bulletSize = 1;
@@ -239,6 +454,7 @@ function setAuthButtonsDisabled(disabled) {
 }
 
 function showAuthScreen() {
+    document.getElementById('character-modal').classList.add('hidden');
     authScreen.classList.remove('hidden');
     homeScreen.classList.add('hidden');
     rankingScreen.classList.add('hidden');
@@ -246,6 +462,7 @@ function showAuthScreen() {
 }
 
 function showHomeScreen() {
+    updateCharacterDisplay();
     authScreen.classList.add('hidden');
     rankingScreen.classList.add('hidden');
     homeScreen.classList.remove('hidden');
@@ -578,6 +795,19 @@ let lastShotTime = 0;
 let windowTimerInterval = null;
 
 const bossImages = ['boss1.png', 'boss2.png', 'boss3.png', 'boss4.png'];
+const BOSS_TYPES = [
+    { id: 'fire', name: '炎竜', awakened: '獄炎竜', hp: 1, speed: 0.85, bulletSpeed: 1, damage: 1.35, interval: 1, phaseSpeed: 1.25, detail: '高火力・連続火炎弾', reward: 8 },
+    { id: 'ice', name: '氷竜', awakened: '氷晶竜', hp: 1.15, speed: 0.65, bulletSpeed: 1.2, damage: 1, interval: 1.1, phaseSpeed: 1.15, detail: '移動は遅いが氷槍が速い', reward: 9 },
+    { id: 'forest', name: '森竜', awakened: '古樹竜', hp: 1.4, speed: 0.55, bulletSpeed: 0.8, damage: 1, interval: 1.15, phaseSpeed: 1.15, detail: '高HP・曲がる種子弾', reward: 11 },
+    { id: 'dark', name: '闇竜', awakened: '深淵竜', hp: 0.85, speed: 1.05, bulletSpeed: 1.1, damage: 1, interval: 0.95, phaseSpeed: 1.25, detail: '低HP・高速移動・らせん弾', reward: 8 }
+];
+function getBossType(boss) { return BOSS_TYPES[boss.bossImageIndex] || BOSS_TYPES[0]; }
+function updateBossIdentity(boss) {
+    const info = getBossType(boss);
+    if (bossHud) bossHud.querySelector('.boss-name').textContent =
+        (boss.bossPhase === 2 ? '第2形態：' + info.awakened : info.name) + ' ／ ' + info.detail;
+}
+
 
 let enemies = [];
 let bullets = [];
@@ -603,6 +833,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 function attemptSkill() {
+    if (!waveEventActive || isGameOver) return;
     const now = Date.now();
     if (now - lastBombTime >= bombCooldown) {
         if (gameData.skills.equipped === 'sphere') {
@@ -636,6 +867,8 @@ btnBattle.addEventListener('click', async () => {
 
     currentWave = 1;
     sessionCoins = 0;
+    resetRunUpgrades();
+    lastWaveEvent = null;
     waveResultSaved = false;
     lastBombTime = -30000;
     if(gameCoinsDisplay) gameCoinsDisplay.textContent = 0;
@@ -643,8 +876,8 @@ btnBattle.addEventListener('click', async () => {
     const skillNames = { sphere: "インボリュート", bomb: "ボム", energy: "ハイエナジー", satellite: "サテライト" };
     if(gameSkillName) gameSkillName.textContent = skillNames[gameData.skills.equipped] || "SKILL";
 
-    const hpLevel = gameData.upgrade.maxHp || 1;
-    playerMaxHp = 10 + (hpLevel - 1) * 5; 
+    updateCharacterDisplay();
+    playerMaxHp = getPlayerMaxHp(); 
     playerCurrentHp = playerMaxHp;
     updateHpDisplay();
 
@@ -682,13 +915,15 @@ btnRetry.addEventListener('click', async () => {
     gameOverScreen.classList.add('hidden');
     currentWave = 1;
     sessionCoins = 0;
+    resetRunUpgrades();
+    lastWaveEvent = null;
     waveResultSaved = false;
     lastBombTime = -30000;
     gameCoinsDisplay.textContent = 0;
     document.body.style.cursor = 'none';
     
-    const hpLevel = gameData.upgrade.maxHp || 1;
-    playerMaxHp = 10 + (hpLevel - 1) * 5; 
+    updateCharacterDisplay();
+    playerMaxHp = getPlayerMaxHp(); 
     playerCurrentHp = playerMaxHp;
     updateHpDisplay();
     startWaveSequence();
@@ -698,6 +933,7 @@ btnReturnHome.addEventListener('click', () => location.reload());
 btnClearHome.addEventListener('click', () => location.reload());
 
 btnNextWave.addEventListener('click', () => {
+    if (rewardPending || lastRewardWave !== currentWave) return;
     waveShopScreen.classList.add('hidden');
     document.body.style.cursor = 'none';
     currentWave++;
@@ -875,7 +1111,7 @@ function createShopItem(container, name, desc, key, shopType) {
             else openWaveShop();
             
             if(key === 'maxHp') {
-                playerMaxHp = 10 + (gameData.upgrade.maxHp - 1) * 5;
+                playerMaxHp = getPlayerMaxHp();
                 playerCurrentHp = playerMaxHp; 
                 updateHpDisplay();
             }
@@ -905,7 +1141,7 @@ function createShopItem(container, name, desc, key, shopType) {
                 else openWaveShop();
 
                 if(key === 'maxHp') {
-                    playerMaxHp = 10;
+                    playerMaxHp = getPlayerMaxHp();
                     if(playerCurrentHp > playerMaxHp) playerCurrentHp = playerMaxHp;
                     updateHpDisplay();
                 }
@@ -923,16 +1159,19 @@ function getPlayerStats() {
     let bSize = 10 + (sizeLevel - 1) * 4;
 
     return {
-        shotInterval: Math.max(100, 500 - (rate - 1) * 40),
-        damage: dmg,
-        moveSpeed: 0.08 + (spd - 1) * 0.01,
-        bulletCount: cnt,
-        bulletSize: bSize
+        shotInterval: Math.max(50, Math.max(100, 500 - (rate - 1) * 40) / (1 + (runUpgrades.fireRate || 0) * 0.1)),
+        damage: dmg * (1 + (runUpgrades.damage || 0) * 0.2) * getSelectedCharacter().damage,
+        moveSpeed: Math.min(1, (0.08 + (spd - 1) * 0.01) * (1 + (runUpgrades.speed || 0) * 0.1) * getSelectedCharacter().speed),
+        bulletCount: cnt + (runUpgrades.count || 0),
+        bulletSize: bSize * (1 + (runUpgrades.bulletSize || 0) * 0.2)
     };
 }
 
 // ■■■ ゲームループ関連 ■■■
 function startWaveSequence() {
+    stopWaveEvent();
+    isGameOver = true;
+    prepareWaveEvent();
     isBossPhase = false;
     clearBossAttackTimers();
     if(bossHud) bossHud.classList.add('hidden');
@@ -956,7 +1195,7 @@ function startWaveSequence() {
     waveModal.classList.remove('hidden');
     waveTitle.textContent = `WAVE ${currentWave}`;
     
-    setTimeout(() => {
+    waveIntroTimer = setTimeout(() => {
         waveModal.classList.add('hidden');
         startBattle();
     }, 2000);
@@ -964,8 +1203,11 @@ function startWaveSequence() {
 
 function startBattle() {
     isGameOver = false;
+    waveEventActive = true;
+    nextBarrageTime = Date.now() + 2500;
     playSound();
     spawnWaveEnemies();
+    if (currentWaveEvent === 'treasure') spawnEnemy('treasure');
 
     if (animationFrameId) cancelAnimationFrame(animationFrameId);
     gameLoop();
@@ -992,6 +1234,7 @@ function gameLoop() {
     player.style.top = playerY + 'px';
 
     const now = Date.now();
+    updateWaveEvent(now);
     if (now - lastShotTime > stats.shotInterval) {
         fireBullet(stats.damage, stats.bulletCount, stats.bulletSize);
         lastShotTime = now;
@@ -999,8 +1242,11 @@ function gameLoop() {
 
     updateBombGauge(now);
     updateBullets();
+    if (!waveEventActive || isGameOver) return;
     updateInvoluteBullets();
+    if (!waveEventActive || isGameOver) return;
     updateEnemyBullets();
+    if (!waveEventActive || isGameOver) return;
     updateEnemies();
     updateHearts();
     animationFrameId = requestAnimationFrame(gameLoop);
@@ -1110,6 +1356,7 @@ function updateInvoluteBullets() {
 
         for (let j = enemies.length - 1; j >= 0; j--) {
             const e = enemies[j];
+            if (!e || !waveEventActive || isGameOver) break;
             const dx = bx - e.x;
             const dy = by - e.y;
             const dist = Math.sqrt(dx*dx + dy*dy);
@@ -1144,13 +1391,15 @@ function updateBombGauge(now) {
 
 function spawnWaveEnemies() {
     let count = 5 + Math.floor(currentWave * 3);
+    if (currentWaveEvent === 'barrage') count = Math.max(3, Math.ceil(count * 0.6));
     if (count > 100) count = 100;
     enemiesRemaining = count;
     if(enemyCountText) enemyCountText.textContent = enemiesRemaining;
     
     for (let i = 0; i < count; i++) {
         const rand = Math.random();
-        if (rand < 0.2) spawnEnemy('golem');
+        if (currentWave >= 2 && (i === 0 || rand < 0.15)) spawnEnemy('rusher');
+        else if (rand < 0.2) spawnEnemy('golem');
         else if (rand < 0.4) spawnEnemy('shooter');
         else spawnEnemy('minion');
     }
@@ -1177,6 +1426,7 @@ function spawnEnemy(type) {
     }
 
     let hp, speed, coinDrop, jumpOffset;
+    let bossImageIndex = null;
     
     if (type === 'minion') {
         el.classList.add('enemy-minion');
@@ -1196,19 +1446,38 @@ function spawnEnemy(type) {
         speed = 0.6;
         coinDrop = Math.floor(Math.random() * 4) + 1;
         jumpOffset = 0;
+    } else if (type === 'rusher') {
+        el.classList.add('enemy-rusher');
+        hp = Math.max(1, Math.floor((2 + currentWave * 1.5) * 0.7));
+        speed = 2.8 + currentWave * 0.12;
+        coinDrop = 3;
+        jumpOffset = 0;
+    } else if (type === 'treasure') {
+        el.classList.add('enemy-minion', 'enemy-treasure');
+        hp = 5 + currentWave * 2;
+        speed = 1.4;
+        coinDrop = 30 + currentWave * 5;
+        jumpOffset = 0;
+        const width = gameArea.clientWidth || window.innerWidth;
+        const height = gameArea.clientHeight || window.innerHeight;
+        ex = width * 0.5;
+        ey = height * 0.3;
     } else { // boss
         el.classList.add('enemy-boss');
         let imgIndex = Math.floor(Math.random() * bossImages.length);
-        el.style.backgroundImage = `url('${bossImages[imgIndex]}')`;
-        hp = 50 + (currentWave * 30);
-        speed = 0.8;
+        bossImageIndex = imgIndex;
+        const info = BOSS_TYPES[imgIndex];
+        el.style.backgroundImage = `url('${bossImages[imgIndex]}?v=dragons-1')`;
+        hp = Math.round((50 + currentWave * 30) * info.hp);
+        speed = info.speed;
         bossMaxHp = hp;
         updateBossHpBar(hp);
-        coinDrop = 5;
+        coinDrop = info.reward;
         hpBar.style.display = 'none';
         jumpOffset = 0;
     }
     
+    if (currentWaveEvent === 'rage') speed *= 1.3;
     el.style.left = ex + 'px';
     el.style.top = ey + 'px';
     
@@ -1219,8 +1488,14 @@ function spawnEnemy(type) {
         x: ex, y: ey, hp: hp, maxHp: hp, type: type, speed: speed, coinDrop: coinDrop,
         jumpTimer: jumpOffset,
         lastAttackTime: type === 'boss' ? Date.now() : 0,
-        lastBossPattern: null
+        lastBossPattern: null,
+        bossImageIndex: bossImageIndex,
+        bossPhase: 1,
+        phase2Type: null,
+        transformingUntil: 0,
+        expiresAt: type === 'treasure' ? Date.now() + 15000 : null
     });
+    if (type === 'boss') updateBossIdentity(enemies[enemies.length - 1]);
 }
 
 function fireBullet(damage, count, size) {
@@ -1292,10 +1567,11 @@ function golemFireBullet(enemy) {
 }
 
 // ■■■ ボスのランダム攻撃 ■■■
-function getBossAttackStats() {
+function getBossAttackStats(boss) {
+    const info = getBossType(boss);
     return {
-        speed: Math.min(6.2, 3.5 + currentWave * 0.13),
-        damage: Math.min(6, 2 + Math.floor((currentWave - 1) / 4))
+        speed: Math.min(6.2, 3.5 + currentWave * 0.13) * (boss?.bossPhase === 2 ? 1.15 : 1) * info.bulletSpeed,
+        damage: Math.ceil(Math.min(6, 2 + Math.floor((currentWave - 1) / 4)) * info.damage)
     };
 }
 
@@ -1309,8 +1585,10 @@ function clearBossAttackTimers() {
 }
 
 function scheduleBossAttack(boss, callback, delay) {
+    const phase = boss.bossPhase;
     const timerId = setTimeout(() => {
-        if (isBossAlive(boss)) callback();
+        bossAttackTimers = bossAttackTimers.filter(id => id !== timerId);
+        if (isBossAlive(boss) && boss.bossPhase === phase && Date.now() >= boss.transformingUntil) callback();
     }, delay);
     bossAttackTimers.push(timerId);
 }
@@ -1324,12 +1602,13 @@ function showBossAttackName(name) {
 }
 
 function createBossBullet(boss, angle, speed, damage, options = {}) {
-    if (!isBossAlive(boss)) return;
+    if (!isBossAlive(boss) || Date.now() < boss.transformingUntil) return;
 
     const el = document.createElement('div');
     const size = options.size || 24;
     el.classList.add('boss-fire');
     if (options.className) el.classList.add(options.className);
+    el.classList.add('boss-bullet-' + getBossType(boss).id);
     el.style.width = size + 'px';
     el.style.height = size + 'px';
     el.style.left = boss.x + 'px';
@@ -1352,7 +1631,7 @@ function createBossBullet(boss, angle, speed, damage, options = {}) {
 
 // 1. プレイヤー方向を中心に広げる扇状攻撃
 function bossAttackFan(boss) {
-    const stats = getBossAttackStats();
+    const stats = getBossAttackStats(boss);
     const baseAngle = Math.atan2(playerY - boss.y, playerX - boss.x);
     const count = Math.min(13, 7 + Math.floor(currentWave / 3));
     const spread = 1.45;
@@ -1368,7 +1647,7 @@ function bossAttackFan(boss) {
 
 // 2. ボスを中心に360度へ放つ円形攻撃
 function bossAttackCircle(boss) {
-    const stats = getBossAttackStats();
+    const stats = getBossAttackStats(boss);
     const count = Math.min(24, 12 + Math.floor(currentWave / 2));
     const startAngle = Math.random() * Math.PI * 2;
 
@@ -1383,7 +1662,7 @@ function bossAttackCircle(boss) {
 
 // 3. 時間差で角度を回しながら撃つ二重らせん攻撃
 function bossAttackSpiral(boss) {
-    const stats = getBossAttackStats();
+    const stats = getBossAttackStats(boss);
     const steps = Math.min(18, 10 + Math.floor(currentWave / 2));
     const stepDelay = Math.max(70, 115 - currentWave * 2);
     const startAngle = Math.random() * Math.PI * 2;
@@ -1407,7 +1686,7 @@ function bossAttackSpiral(boss) {
 
 // 4. 発射するたびに向きが変わる回転十字攻撃
 function bossAttackRotatingCross(boss) {
-    const stats = getBossAttackStats();
+    const stats = getBossAttackStats(boss);
     const volleys = currentWave >= 10 ? 4 : 3;
     const startAngle = Math.random() * Math.PI * 2;
 
@@ -1426,7 +1705,7 @@ function bossAttackRotatingCross(boss) {
 
 // 5. プレイヤーの現在位置を狙い直す3方向×3連射
 function bossAttackTripleAim(boss) {
-    const stats = getBossAttackStats();
+    const stats = getBossAttackStats(boss);
 
     for (let volley = 0; volley < 3; volley++) {
         scheduleBossAttack(boss, () => {
@@ -1441,23 +1720,118 @@ function bossAttackTripleAim(boss) {
     }
 }
 
-function bossFireAttack(boss) {
-    const patterns = [
-        { id: 'fan', name: '扇状攻撃', run: bossAttackFan },
-        { id: 'circle', name: '円形攻撃', run: bossAttackCircle },
-        { id: 'cross', name: '回転十字攻撃', run: bossAttackRotatingCross },
-        { id: 'aim', name: '狙い撃ち3連射', run: bossAttackTripleAim }
-    ];
+// 第2形態は同じボスの残りHPで戦う。大ダメージでも一度は変身する。
+function beginBossSecondPhase(boss) {
+    if (!isBossAlive(boss) || boss.bossPhase === 2) return;
+    clearBossAttackTimers();
+    enemyBullets.forEach(b => b.element.remove());
+    enemyBullets = [];
+    boss.bossPhase = 2;
+    boss.phase2Type = getBossType(boss).id;
+    boss.transformingUntil = Date.now() + 1500;
+    boss.lastAttackTime = boss.transformingUntil;
+    boss.lastBossPattern = null;
+    boss.speed *= getBossType(boss).phaseSpeed;
+    // 読み込み成功時のみ切り替え、未配置なら元の姿を残す。
+    const phaseImage = new Image();
+    phaseImage.onload = () => {
+        if (isBossAlive(boss)) boss.element.style.backgroundImage = `url('boss${boss.bossImageIndex + 1}_phase2.png?v=dragons-1')`;
+    };
+    phaseImage.src = `boss${boss.bossImageIndex + 1}_phase2.png?v=dragons-1`;
+    boss.element.classList.add('boss-phase2', 'boss-phase2-' + boss.phase2Type, 'boss-transforming');
+    if (bossHud) bossHud.classList.add('boss-hud-phase2');
+    updateBossIdentity(boss);
+    showBossAttackName('覚醒中…！');
+}
 
-    // WAVE 3以降は二重らせん攻撃も候補に追加する
-    if (currentWave >= 3) {
-        patterns.push({ id: 'spiral', name: '二重らせん攻撃', run: bossAttackSpiral });
+function bossAttackDoubleCircle(boss) {
+    const stats = getBossAttackStats(boss);
+    const count = Math.min(24, 12 + Math.floor(currentWave / 2));
+    const start = Math.random() * Math.PI * 2;
+    for (let volley = 0; volley < 2; volley++) {
+        scheduleBossAttack(boss, () => {
+            for (let i = 0; i < count; i++) {
+                createBossBullet(boss, start + (i + volley * 0.5) * Math.PI * 2 / count,
+                    stats.speed * 0.78, stats.damage, { size: 18 });
+            }
+        }, volley * 450);
     }
+}
 
-    // 同じ攻撃が2回続かないよう、直前の攻撃を候補から外す
-    const selectablePatterns = patterns.filter(pattern => pattern.id !== boss.lastBossPattern);
-    const selected = selectablePatterns[Math.floor(Math.random() * selectablePatterns.length)];
+function bossAttackAwakenedSpiral(boss) {
+    const stats = getBossAttackStats(boss);
+    const start = Math.random() * Math.PI * 2;
+    const steps = Math.min(18, 10 + Math.floor(currentWave / 2));
+    for (let i = 0; i < steps; i++) {
+        scheduleBossAttack(boss, () => {
+            for (let arm = 0; arm < 3; arm++) {
+                createBossBullet(boss, start + i * 0.38 + arm * Math.PI * 2 / 3,
+                    stats.speed * 0.85, stats.damage, { size: 16, curve: 0.003 });
+            }
+        }, i * 90);
+    }
+}
 
+// 属性専用攻撃。時間差発射は既存のタイマー管理で中断できる。
+function bossAttackFlameBreath(boss) {
+    const stats = getBossAttackStats(boss);
+    const angle = Math.atan2(playerY - boss.y, playerX - boss.x);
+    const volleys = boss.bossPhase === 2 ? 5 : 3;
+    for (let i = 0; i < volleys; i++) scheduleBossAttack(boss, () => {
+        for (let j = -2; j <= 2; j++) createBossBullet(boss, angle + j * 0.15,
+            stats.speed * (0.85 + i * 0.06), stats.damage, { size: 22 });
+    }, i * 220);
+}
+function bossAttackIceLances(boss) {
+    const stats = getBossAttackStats(boss);
+    // 初弾の狙いを固定。弾の間に逃げ道を残す。
+    const angle = Math.atan2(playerY - boss.y, playerX - boss.x);
+    const volleys = boss.bossPhase === 2 ? 4 : 2;
+    for (let i = 0; i < volleys; i++) scheduleBossAttack(boss, () => {
+        [-0.42, 0, 0.42].forEach(offset => createBossBullet(boss, angle + offset,
+            stats.speed * 1.2, stats.damage, { size: 16 }));
+    }, i * 300);
+}
+function bossAttackVineSeeds(boss) {
+    const stats = getBossAttackStats(boss);
+    const count = boss.bossPhase === 2 ? 16 : 12;
+    const angle = Math.random() * Math.PI * 2;
+    const rounds = boss.bossPhase === 2 ? 2 : 1;
+    for (let round = 0; round < rounds; round++) scheduleBossAttack(boss, () => {
+        for (let i = 0; i < count; i++) createBossBullet(boss,
+            angle + (i + round * 0.5) * Math.PI * 2 / count,
+            stats.speed, stats.damage, { size: 18, curve: (i % 2 ? 1 : -1) * 0.008, lifetime: 5500 });
+    }, round * 550);
+}
+function getBossPatterns(boss) {
+    const phase2 = boss.bossPhase === 2;
+    const circle = phase2 ? bossAttackDoubleCircle : bossAttackCircle;
+    const spiral = phase2 ? bossAttackAwakenedSpiral : bossAttackSpiral;
+    const pools = {
+        fire: [
+            ['breath', '連続火炎ブレス', bossAttackFlameBreath], ['fan', '爆炎扇状弾', bossAttackFan],
+            ['circle', '火炎リング', circle], ['aim', '火炎3連射', bossAttackTripleAim], ['cross', '回転火炎弾', bossAttackRotatingCross]
+        ],
+        ice: [
+            ['lances', '氷槍連射', bossAttackIceLances], ['cross', '回転氷晶', bossAttackRotatingCross],
+            ['circle', '氷のリング', circle], ['fan', '氷片拡散', bossAttackFan], ['aim', '追撃氷弾', bossAttackTripleAim]
+        ],
+        forest: [
+            ['seeds', '蔓の種子弾', bossAttackVineSeeds], ['circle', '種子リング', circle],
+            ['fan', '葉刃拡散', bossAttackFan], ['spiral', '蔓のらせん', spiral], ['cross', '回転葉刃', bossAttackRotatingCross]
+        ],
+        dark: [
+            ['spiral', '闇のらせん', spiral], ['aim', '影の追撃', bossAttackTripleAim],
+            ['cross', '回転暗黒弾', bossAttackRotatingCross], ['circle', '暗黒リング', circle], ['fan', '闇刃拡散', bossAttackFan]
+        ]
+    };
+    return pools[getBossType(boss).id].slice(0, currentWave >= 3 ? 5 : 4)
+        .map(([id, name, run]) => ({ id, name: (phase2 ? '覚醒・' : '') + name, run }));
+}
+function bossFireAttack(boss) {
+    if (!isBossAlive(boss) || Date.now() < boss.transformingUntil) return;
+    const patterns = getBossPatterns(boss).filter(pattern => pattern.id !== boss.lastBossPattern);
+    const selected = patterns[Math.floor(Math.random() * patterns.length)];
     boss.lastBossPattern = selected.id;
     showBossAttackName(selected.name);
     selected.run(boss);
@@ -1493,6 +1867,7 @@ function updateBullets() {
 function updateEnemyBullets() {
     const now = performance.now();
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
+        if (!waveEventActive || isGameOver) break;
         const b = enemyBullets[i];
 
         // curveが設定されたボス弾は、毎フレーム進行方向を少し回転させる
@@ -1533,6 +1908,17 @@ function updateEnemies() {
     const now = Date.now();
     for (let i = enemies.length - 1; i >= 0; i--) {
         const e = enemies[i];
+        if (!waveEventActive || isGameOver) break;
+        if (e.type === 'treasure') {
+            const angle = Math.atan2(e.y - playerY, e.x - playerX);
+            const width = gameArea.clientWidth || window.innerWidth;
+            const height = gameArea.clientHeight || window.innerHeight;
+            e.x = Math.max(35, Math.min(width - 35, e.x + Math.cos(angle) * e.speed));
+            e.y = Math.max(35, Math.min(height - 35, e.y + Math.sin(angle) * e.speed));
+            e.element.style.left = e.x + 'px';
+            e.element.style.top = e.y + 'px';
+            continue;
+        }
         
         let moveSpeed = e.speed;
 
@@ -1565,8 +1951,13 @@ function updateEnemies() {
             }
             e.element.style.transform = 'translate(-50%, -50%)';
         }
+        else if (e.type === 'rusher') {
+            e.element.style.transform = 'translate(-50%, -50%)';
+        }
         else { // boss
-            const bossAttackInterval = Math.max(2200, 3200 - currentWave * 50);
+            if (now < e.transformingUntil) continue;
+            e.element.classList.remove('boss-transforming');
+            const bossAttackInterval = Math.max(2200, 3200 - currentWave * 50) * (e.bossPhase === 2 ? 0.8 : 1) * getBossType(e).interval;
             if (now - e.lastAttackTime > bossAttackInterval) {
                 bossFireAttack(e);
                 e.lastAttackTime = now;
@@ -1583,7 +1974,7 @@ function updateEnemies() {
 
         if (Math.sqrt((playerX - e.x)**2 + (playerY - e.y)**2) < (e.type === 'boss' ? 80 : 40)) {
             if (now - lastDamageTime > 1000) {
-                takePlayerDamage(1 + Math.floor(currentWave/3)); 
+                takePlayerDamage((1 + Math.floor(currentWave/3)) * (e.type === 'rusher' ? 2 : 1)); 
                 lastDamageTime = now;
             }
         }
@@ -1591,6 +1982,8 @@ function updateEnemies() {
 }
 
 function takePlayerDamage(dmg) {
+    if (isGameOver || !waveEventActive) return;
+    if (currentWaveEvent === 'rage') dmg = Math.ceil(dmg * 1.5);
     playerCurrentHp -= dmg;
     updateHpDisplay();
     playSound();
@@ -1609,7 +2002,13 @@ function updateHpDisplay() {
 }
 
 function damageEnemy(e, dmg) {
+    if (!waveEventActive || isGameOver || !enemies.includes(e)) return;
+    if (e.type === 'boss' && Date.now() < e.transformingUntil) return;
     e.hp -= dmg;
+    if (e.type === 'boss' && e.bossPhase === 1 && e.hp <= e.maxHp * 0.5) {
+        e.hp = e.maxHp * 0.5;
+        beginBossSecondPhase(e);
+    }
     showDamageText(e.x, e.y, dmg);
     playSound();
     
@@ -1624,15 +2023,17 @@ function damageEnemy(e, dmg) {
 }
 
 function killEnemy(e) {
+    if (!enemies.includes(e)) return;
     playSound();
+    const reward = e.coinDrop * (WAVE_EVENTS[currentWaveEvent]?.coins || 1);
     
-    sessionCoins += e.coinDrop;
+    sessionCoins += reward;
     if(gameCoinsDisplay) gameCoinsDisplay.textContent = sessionCoins;
     
-    gameData.coins += e.coinDrop;
+    gameData.coins += reward;
     saveData();
 
-    if (e.coinDrop > 0) showCoinText(e.x, e.y, e.coinDrop);
+    if (reward > 0) showCoinText(e.x, e.y, reward);
 
     if (e.type === 'boss' || Math.random() < 0.1) {
         spawnHeart(e.x, e.y);
@@ -1642,6 +2043,10 @@ function killEnemy(e) {
     const idx = enemies.indexOf(e);
     if (idx > -1) enemies.splice(idx, 1);
 
+    if (e.type === 'treasure') {
+        document.getElementById('wave-event-hud').textContent = '宝物スライム撃破！ +' + reward + 'G';
+        return;
+    }
     if (e.type === 'boss') {
         waveClear();
     } else {
@@ -1678,6 +2083,10 @@ function updateHearts() {
 
 function spawnBoss() {
     isBossPhase = true;
+    if (bossHud) {
+        bossHud.classList.remove('boss-hud-phase2');
+        bossHud.querySelector('.boss-name').textContent = 'WARNING: GIANT BOSS';
+    }
     if(bossHud) bossHud.classList.remove('hidden');
     if(bossAttackName) bossAttackName.textContent = '攻撃準備中...';
     playSound();
@@ -1686,6 +2095,9 @@ function spawnBoss() {
 }
 
 function waveClear() {
+    if (rewardPending || currentWave <= lastRewardWave) return;
+    stopWaveEvent();
+    isGameOver = true;
     clearBossAttackTimers();
     if (currentWave >= 20) {
         gameClear();
@@ -1695,10 +2107,11 @@ function waveClear() {
     playSound();
     clearInterval(windowTimerInterval);
     cancelAnimationFrame(animationFrameId);
-    openWaveShop();
+    openWaveReward();
 }
 
 function gameClear() {
+    stopWaveEvent();
     isGameOver = true;
     saveWaveResult(20);
     clearBossAttackTimers();
@@ -1717,6 +2130,7 @@ function gameClear() {
 }
 
 function gameOver(reason) {
+    stopWaveEvent();
     isGameOver = true;
     saveWaveResult(currentWave);
     clearBossAttackTimers();

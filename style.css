@@ -11,6 +11,46 @@ body {
 
 .hidden { display: none !important; }
 
+#reward-screen {
+    position: fixed; inset: 0; z-index: 400; padding: 24px; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center; overflow: auto;
+    background: rgba(5, 8, 25, .96); cursor: default;
+}
+.reward-panel { max-width: 900px; width: 100%; text-align: center; margin: auto; }
+.reward-panel h2 { color: #ffe782; line-height: 1.5; }
+.reward-panel p { color: #cbd5e1; line-height: 1.7; }
+#reward-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin: 28px 0; }
+.reward-card {
+    display: flex; flex-direction: column; gap: 22px; align-items: center;
+    padding: 30px 16px; min-height: 220px; border: 2px solid #626cff; border-radius: 16px;
+    background: linear-gradient(150deg, #242a60, #12162c); color: white;
+    font: inherit; cursor: pointer; transition: transform .15s, border-color .15s;
+}
+.reward-card strong { color: #78f6ff; font-size: 22px; }
+.reward-card span { line-height: 1.7; }
+.reward-card small { color: #cbd5e1; margin-top: auto; }
+.reward-card:hover, .reward-card:focus-visible { border-color: #ffe782; transform: translateY(-4px); outline: 2px solid #ffe782; }
+#run-upgrade-summary { color: #78f6ff; font-size: 13px; line-height: 1.7; }
+@media (max-width: 650px) {
+    #reward-cards { grid-template-columns: 1fr; }
+    .reward-card { min-height: 100px; padding: 18px; gap: 10px; }
+}
+
+#wave-event-hud {
+    position: absolute; top: 145px; left: 50%; transform: translateX(-50%);
+    z-index: 95; max-width: 88%; padding: 8px 16px; border: 1px solid #ffd700;
+    border-radius: 8px; background: rgba(12, 16, 32, .88); color: #ffe782;
+    text-align: center; font-size: 13px; pointer-events: none;
+}
+#wave-event-title { color: #ffd700; font-size: 30px; margin: 24px 0 4px; }
+#wave-modal #wave-event-description { padding: 0 24px; text-align: center; animation: none; }
+.enemy-treasure {
+    filter: sepia(1) saturate(5); border: 2px solid #ffd700; border-radius: 50%;
+    box-shadow: 0 0 22px #ffd700; transform: translate(-50%, -50%);
+}
+.enemy-treasure::after { content: 'G'; color: #fff176; text-shadow: 1px 1px #000; }
+.event-bullet { background: #df78ff; box-shadow: 0 0 10px #c34bff; }
+
 /* 英語部分や数字にはドットフォントを適用、日本語はゴシック */
 h1, h2, .menu-btn, .hud-item, .boss-name, .damage-text, .back-btn, .buy-btn, .reset-btn, .bomb-label, .dead-title, .clear-title {
     font-family: 'Press Start 2P', sans-serif;
@@ -69,7 +109,7 @@ h1, h2, .menu-btn, .hud-item, .boss-name, .damage-text, .back-btn, .buy-btn, .re
 .hp-box { color: #ff4757; }
 #game-area { position: relative; flex-grow: 1; width: 100%; overflow: hidden; }
 
-#player { width: 60px; height: 60px; background-color: transparent; background-image: url('常林暴.png'); background-size: contain; background-repeat: no-repeat; background-position: center; position: absolute; z-index: 20; transform: translate(-50%, -50%); border: none; }
+#player { width: 60px; height: 60px; background-color: transparent; background-image: url('player_balance.png'); background-size: contain; background-repeat: no-repeat; background-position: center; position: absolute; z-index: 20; transform: translate(-50%, -50%); border: none; }
 .bullet { width: 10px; height: 10px; background-color: #ffff00; position: absolute; border-radius: 50%; box-shadow: 0 0 5px #ffff00; z-index: 15; transform: translate(-50%, -50%); }
 
 /* 敵 */
@@ -290,3 +330,40 @@ button:disabled { cursor: wait; opacity: 0.6; }
     .ranking-table { min-width: 620px; }
     .game-title { font-size: 26px; }
 }
+
+/* 第2形態。見た目を大きくしても従来の当たり判定は維持。 */
+.enemy-boss.boss-phase2 { width: 185px; height: 185px; background-color: transparent; background-size: contain; background-repeat: no-repeat; background-position: center; }
+.boss-phase2-fire { filter: drop-shadow(0 0 12px #ff541a); }
+.boss-phase2-thunder { filter: drop-shadow(0 0 12px #9364ff); }
+.boss-transforming { animation: bossAwaken 0.3s ease-in-out 5 alternate; }
+@keyframes bossAwaken { from { opacity: 0.35; } to { opacity: 1; } }
+.boss-hud-phase2 .boss-name { color: #ffdc74; }
+.boss-hud-phase2 #boss-hp-bar { background: linear-gradient(90deg, #ff541a, #b648ff); }
+.boss-bullet-fire { background: radial-gradient(circle, #fff6aa, #ff481a); box-shadow: 0 0 12px #ff481a; }
+.boss-bullet-thunder { background: radial-gradient(circle, #fff, #52dfff, #864bff); box-shadow: 0 0 12px #864bff; }
+@media (prefers-reduced-motion: reduce) { .boss-transforming { animation: none; } }
+
+/* キャラ選択と旧プレイヤーを使った高速敵 */
+.selected-character { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 8px 0; }
+.selected-character img { width: 64px; height: 64px; object-fit: contain; }
+.character-panel { width: min(960px, 94vw); max-height: 90vh; overflow-y: auto; padding: 24px; box-sizing: border-box; background: #131c2d; border: 2px solid #59cfff; border-radius: 16px; text-align: center; }
+.character-panel p { line-height: 1.6; }
+#character-cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
+.character-card { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 12px; border: 2px solid #475568; border-radius: 12px; color: white; background: #202d43; cursor: pointer; font: inherit; }
+.character-card img { width: 100%; height: 160px; object-fit: contain; }
+.character-card small { line-height: 1.6; }
+.character-card b { margin-top: auto; color: #8de8ff; }
+.character-card.selected { border-color: #5de8ff; background: #233e55; }
+.character-card:focus-visible { outline: 3px solid #ffdc65; outline-offset: 2px; }
+.enemy-rusher { background-image: url('常林暴.png'); width: 60px; height: 60px; filter: drop-shadow(0 0 5px #ff374d); }
+@media (max-width: 700px) { #character-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .character-card img { height: 120px; } }
+#home-screen { overflow-y: auto; }
+
+/* 4属性のボス演出 */
+.boss-phase2-ice { filter: drop-shadow(0 0 12px #72e5ff); }
+.boss-phase2-forest { filter: drop-shadow(0 0 12px #72db4a); }
+.boss-phase2-dark { filter: drop-shadow(0 0 12px #b850ff); }
+.boss-fire.boss-bullet-ice { background: radial-gradient(circle, #fff, #7ceaff, #258bff); box-shadow: 0 0 12px #7ceaff; }
+.boss-fire.boss-bullet-forest { background: radial-gradient(circle, #ffffbe, #70d847, #25812d); box-shadow: 0 0 12px #70d847; }
+.boss-fire.boss-bullet-dark { background: radial-gradient(circle, #fff, #c85aff, #5425a0); box-shadow: 0 0 12px #bd55ff; }
+.boss-name { line-height: 1.6; }
