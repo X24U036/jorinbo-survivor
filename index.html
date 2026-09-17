@@ -2,8 +2,9 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>常林暴サバイバー</title>
-    <link rel="stylesheet" href="style.css?v=dragons-1">
+    <link rel="stylesheet" href="style.css?v=mobile-1">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -177,6 +178,10 @@
             <div id="player"></div>
         </div>
 
+        <div id="touch-control-bar">
+            <span>画面をなぞって移動<br>攻撃は自動</span>
+            <button id="btn-touch-skill" type="button" disabled>スキル発動</button>
+        </div>
         <div id="wave-modal" class="hidden">
             <h2 id="wave-title">WAVE 1</h2>
             <h3 id="wave-event-title"></h3>
@@ -211,6 +216,6 @@
     <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="script.js?v=dragons-1"></script>
+    <script src="script.js?v=mobile-1"></script>
 </body>
 </html>

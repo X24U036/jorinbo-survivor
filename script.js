@@ -270,6 +270,7 @@ function prepareWaveEvent() {
 }
 
 function stopWaveEvent() {
+    stopTouchMovement();
     waveEventActive = false;
     clearTimeout(waveIntroTimer);
     // ボーナス敵は通常敵の残数に含めない。消えてもWAVE進行を止めない。
@@ -819,15 +820,69 @@ let bossAttackTimers = [];
 updateCoinDisplays();
 if(gameData.name && usernameInput) usernameInput.value = gameData.name;
 
-document.addEventListener('mousemove', (e) => {
-    mouseX = e.clientX;
-    mouseY = e.clientY;
+function getArenaSize() {
+    return { width: gameArea.clientWidth || window.innerWidth, height: gameArea.clientHeight || window.innerHeight };
+}
+function clampPlayerPosition() {
+    const { width, height } = getArenaSize();
+    const margin = Math.min(30, width / 2, height / 2);
+    playerX = Math.max(margin, Math.min(width - margin, playerX));
+    playerY = Math.max(margin, Math.min(height - margin, playerY));
+    mouseX = Math.max(margin, Math.min(width - margin, mouseX));
+    mouseY = Math.max(margin, Math.min(height - margin, mouseY));
+}
+let movementPointerId = null;
+let lastTouchX = 0;
+let lastTouchY = 0;
+function stopTouchMovement() {
+    if (movementPointerId !== null && gameArea.hasPointerCapture(movementPointerId)) gameArea.releasePointerCapture(movementPointerId);
+    movementPointerId = null;
+    mouseX = playerX;
+    mouseY = playerY;
+}
+gameArea.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' || movementPointerId !== null || !waveEventActive || isGameOver) return;
+    document.body.classList.add('touch-controls');
+    movementPointerId = e.pointerId;
+    lastTouchX = e.clientX;
+    lastTouchY = e.clientY;
+    mouseX = playerX;
+    mouseY = playerY;
+    gameArea.setPointerCapture(e.pointerId);
+    e.preventDefault();
 });
+gameArea.addEventListener('pointermove', e => {
+    if (!waveEventActive || isGameOver) return;
+    if (e.pointerType === 'mouse') {
+        const rect = gameArea.getBoundingClientRect();
+        mouseX = e.clientX - rect.left;
+        mouseY = e.clientY - rect.top;
+    } else if (e.pointerId === movementPointerId) {
+        // 相対移動なので指でキャラを隠さず、どこからでもドラッグできる。
+        mouseX += e.clientX - lastTouchX;
+        mouseY += e.clientY - lastTouchY;
+        lastTouchX = e.clientX;
+        lastTouchY = e.clientY;
+        e.preventDefault();
+    } else return;
+    clampPlayerPosition();
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => gameArea.addEventListener(type, e => {
+    if (e.pointerId === movementPointerId) {
+        movementPointerId = null;
+        mouseX = playerX;
+        mouseY = playerY;
+    }
+}));
+window.addEventListener('blur', stopTouchMovement);
+window.addEventListener('resize', () => { stopTouchMovement(); clampPlayerPosition(); });
+document.getElementById('btn-touch-skill').addEventListener('click', () => attemptSkill());
 
 // スキル発動 (Spaceキー)
 document.addEventListener('keydown', (e) => {
     if (isGameOver) return;
     if (e.code === 'Space') {
+        e.preventDefault();
         attemptSkill();
     }
 });
@@ -1202,6 +1257,10 @@ function startWaveSequence() {
 }
 
 function startBattle() {
+    const arena = getArenaSize();
+    playerX = mouseX = arena.width / 2;
+    playerY = mouseY = arena.height / 2;
+    clampPlayerPosition();
     isGameOver = false;
     waveEventActive = true;
     nextBarrageTime = Date.now() + 2500;
@@ -1230,6 +1289,7 @@ function gameLoop() {
         playerX += (mouseX - playerX) * stats.moveSpeed;
         playerY += (mouseY - playerY) * stats.moveSpeed;
     }
+    clampPlayerPosition();
     player.style.left = playerX + 'px';
     player.style.top = playerY + 'px';
 
@@ -1290,7 +1350,7 @@ function triggerHighEnergyCircle() {
     playSound();
     const level = gameData.skills.levels.energy;
     // 画面全体を覆うほど大きな半径にする
-    const maxDim = Math.max(window.innerWidth, window.innerHeight);
+    const maxDim = Math.max(getArenaSize().width, getArenaSize().height);
     const radius = maxDim; 
     const damage = 20 + (level - 1) * 10;
 
@@ -1324,7 +1384,7 @@ function triggerSatellite() {
             const el = document.createElement('div');
             el.classList.add('satellite-beam');
             el.style.left = (target.x + 30) + 'px';
-            el.style.bottom = (window.innerHeight - target.y) + 'px'; 
+            el.style.bottom = (getArenaSize().height - target.y) + 'px'; 
             
             gameArea.appendChild(el);
             setTimeout(() => el.remove(), 500);
@@ -1380,6 +1440,10 @@ function updateInvoluteBullets() {
 }
 
 function updateBombGauge(now) {
+    const button = document.getElementById('btn-touch-skill');
+    const seconds = Math.max(0, Math.ceil((bombCooldown - (now - lastBombTime)) / 1000));
+    button.disabled = isGameOver || !waveEventActive || seconds > 0;
+    button.textContent = seconds > 0 ? 'あと ' + seconds + '秒' : 'スキル発動';
     const elapsed = now - lastBombTime;
     let percentage = (elapsed / bombCooldown) * 100;
     if (percentage > 100) percentage = 100;
@@ -1418,11 +1482,11 @@ function spawnEnemy(type) {
 
     let ex, ey;
     if (Math.random() < 0.5) {
-        ex = Math.random() < 0.5 ? -50 : window.innerWidth + 50;
-        ey = Math.random() * window.innerHeight;
+        ex = Math.random() < 0.5 ? -50 : getArenaSize().width + 50;
+        ey = Math.random() * getArenaSize().height;
     } else {
-        ex = Math.random() * window.innerWidth;
-        ey = Math.random() < 0.5 ? -50 : window.innerHeight + 50;
+        ex = Math.random() * getArenaSize().width;
+        ey = Math.random() < 0.5 ? -50 : getArenaSize().height + 50;
     }
 
     let hp, speed, coinDrop, jumpOffset;
@@ -1458,8 +1522,8 @@ function spawnEnemy(type) {
         speed = 1.4;
         coinDrop = 30 + currentWave * 5;
         jumpOffset = 0;
-        const width = gameArea.clientWidth || window.innerWidth;
-        const height = gameArea.clientHeight || window.innerHeight;
+        const width = gameArea.clientWidth || getArenaSize().width;
+        const height = gameArea.clientHeight || getArenaSize().height;
         ex = width * 0.5;
         ey = height * 0.3;
     } else { // boss
@@ -1844,7 +1908,7 @@ function updateBullets() {
         b.element.style.left = b.x + 'px';
         b.element.style.top = b.y + 'px';
 
-        if (b.x<0 || b.x>window.innerWidth || b.y<0 || b.y>window.innerHeight) {
+        if (b.x<0 || b.x>getArenaSize().width || b.y<0 || b.y>getArenaSize().height) {
             b.element.remove(); bullets.splice(i, 1); continue;
         }
 
@@ -1886,7 +1950,7 @@ function updateEnemyBullets() {
         b.element.style.top = b.y + 'px';
 
         const expired = b.createdAt && now - b.createdAt > b.lifetime;
-        if (expired || b.x < -80 || b.x > window.innerWidth + 80 || b.y < -80 || b.y > window.innerHeight + 80) {
+        if (expired || b.x < -80 || b.x > getArenaSize().width + 80 || b.y < -80 || b.y > getArenaSize().height + 80) {
             b.element.remove();
             enemyBullets.splice(i, 1);
             continue;
@@ -1911,8 +1975,8 @@ function updateEnemies() {
         if (!waveEventActive || isGameOver) break;
         if (e.type === 'treasure') {
             const angle = Math.atan2(e.y - playerY, e.x - playerX);
-            const width = gameArea.clientWidth || window.innerWidth;
-            const height = gameArea.clientHeight || window.innerHeight;
+            const width = gameArea.clientWidth || getArenaSize().width;
+            const height = gameArea.clientHeight || getArenaSize().height;
             e.x = Math.max(35, Math.min(width - 35, e.x + Math.cos(angle) * e.speed));
             e.y = Math.max(35, Math.min(height - 35, e.y + Math.sin(angle) * e.speed));
             e.element.style.left = e.x + 'px';
