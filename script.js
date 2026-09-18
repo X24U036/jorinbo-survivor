@@ -828,8 +828,17 @@ const BOSS_TYPES = [
     { id: 'dark', name: '闇竜', awakened: '深淵竜', hp: 0.85, speed: 1.05, bulletSpeed: 1.1, damage: 1, interval: 0.95, phaseSpeed: 1.25, detail: '低HP・高速移動・らせん弾', reward: 8 }
 ];
 function getBossType(boss) { return BOSS_TYPES[boss.bossImageIndex] || BOSS_TYPES[0]; }
+function resetBossArena() {
+    gameArea.classList.remove('arena-fire', 'arena-ice', 'arena-forest', 'arena-dark', 'arena-awakened');
+}
+function updateBossArena(boss) {
+    resetBossArena();
+    gameArea.classList.add('arena-' + getBossType(boss).id);
+    if (boss.bossPhase === 2) gameArea.classList.add('arena-awakened');
+}
 function updateBossIdentity(boss) {
     const info = getBossType(boss);
+    updateBossArena(boss);
     if (bossHud) bossHud.querySelector('.boss-name').textContent =
         (boss.bossPhase === 2 ? '第2形態：' + info.awakened : info.name) + ' ／ ' + info.detail;
 }
@@ -1274,6 +1283,7 @@ function getPlayerStats() {
 
 // ■■■ ゲームループ関連 ■■■
 function startWaveSequence() {
+    resetBossArena();
     window.GameAudio?.scene("battle");
     stopWaveEvent();
     isGameOver = true;
