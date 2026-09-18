@@ -441,3 +441,26 @@ body.touch-controls .bomb-label::after { content: 'SKILL'; font-size: 11px; }
     .reward-card { min-height: 90px; padding: 10px; gap: 8px; }
     .reward-card strong { font-size: 16px; }
 }
+
+/* Small sound controls available on every screen. */
+#audio-settings { position: fixed; right: max(10px, env(safe-area-inset-right)); bottom: max(10px, env(safe-area-inset-bottom)); z-index: 20000; color: #fff; font: 14px sans-serif; cursor: auto; }
+#audio-settings summary { padding: 7px 12px; border: 1px solid #7786b4; border-radius: 18px; background: #171c32ee; cursor: pointer; list-style: none; }
+#audio-settings[open] { background: #171c32f5; border: 1px solid #7786b4; border-radius: 12px; padding: 8px; }
+#audio-settings .audio-options { width: min(245px, 75vw); padding: 8px; }
+#audio-settings label { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0; }
+#audio-settings input[type=range] { width: 150px; accent-color: #8bf6ff; }
+#audio-settings small { color: #c0c9e0; font-size: 11px; }
+@media (any-pointer: coarse) { #audio-settings { bottom: calc(84px + env(safe-area-inset-bottom)); } }
+body.touch-controls #audio-settings { bottom: calc(84px + env(safe-area-inset-bottom)); }
+
+/* WAVE間ショップは戦闘画面の高さに影響されない独立画面にする。 */
+#wave-shop-screen {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+}
+#wave-shop-screen .shop-container { flex-shrink: 0; margin: auto; }

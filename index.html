@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>常林暴サバイバー</title>
-    <link rel="stylesheet" href="style.css?v=mobile-1">
+    <link rel="stylesheet" href="style.css?v=mobile-audio-2">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Roboto:wght@700&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -40,6 +40,7 @@
             <div class="menu-grid">
                 <button id="btn-character" class="menu-btn shop-btn">キャラクター選択</button>
                 <button id="btn-battle" class="menu-btn battle-btn">戦闘開始</button>
+                <button id="btn-endless" class="menu-btn battle-btn hidden">エンドレスモードへ挑戦<br><small>WAVE21から開始</small></button>
                 <button id="btn-skill-shop" class="menu-btn shop-btn" style="background: linear-gradient(45deg, #ff9f43, #ff5252);">スキル選択</button>
                 <button id="btn-weapon" class="menu-btn shop-btn">武器強化</button>
                 <button id="btn-player" class="menu-btn shop-btn">能力強化</button>
@@ -202,9 +203,11 @@
     </div>
 
     <div id="game-clear-screen" class="hidden">
-        <h1 class="clear-title">MISSION COMPLETE!</h1>
+        <h1 class="clear-title">GAME CLEAR!</h1>
         <div class="result-box">
-            <p>おめでとうございます！</p>
+            <p>WAVE20クリア！ おめでとうございます！</p>
+            <p>エンドレスモード解放！</p>
+            <p>約4秒後にホームへ戻ります。</p>
             <p>獲得コイン: <span id="clear-coins" class="gold-text"></span> G</p>
         </div>
         <div class="menu-grid">
@@ -216,6 +219,7 @@
     <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore-compat.js"></script>
     <script src="firebase-config.js"></script>
-    <script src="script.js?v=mobile-1"></script>
+    <script src="audio.js?v=mobile-audio-2"></script>
+    <script src="script.js?v=mobile-audio-2"></script>
 </body>
 </html>

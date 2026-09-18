@@ -8,6 +8,7 @@ service cloud.firestore {
 
     function hasValidPlayerFields() {
       return request.resource.data.keys().hasOnly([
+          'isDeveloper',
           'username',
           'usernameKey',
           'highestWave',
@@ -16,6 +17,7 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ])
+        && (!('isDeveloper' in request.resource.data) || request.resource.data.isDeveloper is bool)
         && request.resource.data.username is string
         && request.resource.data.username.size() >= 2
         && request.resource.data.username.size() <= 64
@@ -24,10 +26,8 @@ service cloud.firestore {
         && request.resource.data.usernameKey.size() <= 64
         && request.resource.data.highestWave is int
         && request.resource.data.highestWave >= 0
-        && request.resource.data.highestWave <= 20
         && request.resource.data.latestWave is int
         && request.resource.data.latestWave >= 0
-        && request.resource.data.latestWave <= 20
         && request.resource.data.highestWave >= request.resource.data.latestWave
         && request.resource.data.attempts is int
         && request.resource.data.attempts >= 0
@@ -37,7 +37,8 @@ service cloud.firestore {
     }
 
     function isNewPlayer() {
-      return request.resource.data.highestWave == 0
+      return request.resource.data.get('isDeveloper', false) == false
+        && request.resource.data.highestWave == 0
         && request.resource.data.latestWave == 0
         && request.resource.data.attempts == 0
         && request.resource.data.createdAt == request.time
@@ -71,6 +72,7 @@ service cloud.firestore {
         && isNewPlayer();
       allow update: if signedInAs(userId)
         && hasValidPlayerFields()
+        && request.resource.data.get('isDeveloper', false) == resource.data.get('isDeveloper', false)
         && request.resource.data.username == resource.data.username
         && request.resource.data.usernameKey == resource.data.usernameKey
         && request.resource.data.createdAt == resource.data.createdAt
